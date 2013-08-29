@@ -1,0 +1,164 @@
+#
+# Accounts.yaml
+# Copryright (c) 2012-2013 Paul S. Traina
+# All rights reserved, see LICENSE file for rights details.
+#
+# This file describes alarm "Accounts" for various different subscribers
+# to the cental monitoring software.
+#
+# You should understand the YAML syntax before mucking about too much.
+# Whitespace is actually important
+#
+
+# these are the same users in every ademco/honeywell vista based alarm
+default_vista_users: &default_vista_users
+  1: 'Installer User'
+  2: 'Master User'
+  3: 'Partiton 1 Master User'
+  33: 'Partition 2 Master User'
+
+# these are default zones in every ademco/honeywell vista based alarm
+default_vista_zones: &default_vista_zones
+  8: Tamper
+  95: 'Panic CALL FIRE'
+  96: 'Panic CALL MEDICAL'
+  99: 'Panic CALL POLICE'
+
+# the John and Jim Doe family house
+2612:
+  account_name: 'Doe House'
+  service_location: '123 Main Street'
+  users:
+    <<: *default_vista_users
+    4: 'John Doe'
+    5: 'Jim Doe'
+    6: 'Nice Neighbor'
+    7: 'Housekeeper'
+    8: 'Houseguest'
+  zones:
+    <<: *default_vista_zones
+    9: 'Front Door'
+    10: 'Garage Overhead Door'
+    11: 'Garage Side Door (Trash)'
+    12: 'Garage Rear Door (Garden)'
+    13: 'Downstairs BR Door'
+    14: 'Downstairs BR Side Window'
+    15: 'Downstairs BR Rear Window'
+    16: 'LR Left Window'
+    17: 'LR Right Window'
+    18: 'FR Front Window'
+    19: 'FR Rear Window'
+    20: 'Kitchen Door'
+    21: 'Kitchen Window'
+    22: 'MBR Left Window'
+    23: 'MBR Right Window'
+    24: 'Front BR Left Window'
+    25: 'Front BR Middle Window'
+    26: 'Front BR Right Window'
+    27: 'Foyer Motion'
+    28: 'Foyer Smoke'
+    29: 'Bedroom Hall Smoke'
+    30: 'Garage Heat Detector'
+    31: 'Sump Flood Detector'
+    32: 'Shark Pool'
+    33: 'Frickin Lazer Beams'
+    34: 'Mutated Sea Bass Room'
+    49: 'John Keyfob Arm Away'
+    50: 'John Keyfob Arm Stay'
+    51: 'John Keyfob Disarm'
+    52: 'John Keyfob Panic (unused)'
+    53: 'Jim Keyfob Arm Away'
+    54: 'Jim Keyfob Arm Stay'
+    55: 'Jim Keyfob Disarm'
+    56: 'Jim Keyfob Panic (unused)'
+  notify:
+    alarm:	# the following addresses receive message in case of an alarm
+      phone:
+        - '14155551212'                # John
+        - '14155551213'                # Jim
+        - '14155556666'                # Nice Neighbor
+      sms:
+        - '14155551212'                # John
+        - '14155551213'                # Jim
+        - '14155556666'                # Nice Neighbor
+      twitter:
+        - mutantseabass
+        - savage
+        - doctorevil
+      email:
+        - 'Jim Doe <jim@doefamily.com>'
+        - 'Doctor Evil <nicedoc@evillair.net>'
+    info:	# additionally, these get informational level status updates
+      email:
+        - 'John Doe <john@doefamily.com>'
+      boxcar:
+        - john@doefamily.com
+    all:	# additionally, these get -everything- including periodic tests
+      email:
+        - 'Alarm Log <alarm-testing@evillair.net>'
+
+#
+# Another house we monitor, but this one uses a DSC alarm with SIA event tones,
+# so we don't include the default vista information
+#
+1482:
+  account_name: 'Columbus House'
+  service_location: '155 28th Avenue'
+  zones:
+    1: 'Smoke Detectors'
+    2: 'Waterflow - Sprinkler'
+    3: 'Heat Garage'
+    4: 'Heat Lower Kitchen'
+    5: 'Heat Main Kitchen'
+    6: 'Heat Laundry'
+    7: 'Motion 4th Landing'
+    8: 'Motion 3rd Landing'
+    9: 'Motion Front Door'
+    10: 'Motion Lower Area'
+    11: 'Front Door'
+    12: 'Garage Entry Door'
+    13: 'Roll-up Door'
+    14: 'Utility Door'
+    33: 'Guest Room Left Door'
+    34: 'Guest Room Left Window'
+    35: 'Guest Room Right Window'
+    36: 'Guest room Right Door'
+    37: 'Nook Left Window'
+    38: 'Nook Right Window'
+    39: 'Nook Side Window'
+    40: 'Nook Door'
+    41: 'Dining Room Door'
+    42: 'Dining Room Window'
+    43: 'Living Room Left Window'
+    44: 'Living Room Center Window'
+    45: 'Library Center Window'
+    46: 'Living Room Right Window'
+    47: 'Child Room Left Window'
+    48: 'Child Room Right Window'
+    49: 'Office Left Window'
+    50: 'Office Right Window'
+    51: 'Master Left Window'
+    52: 'Master Center Left Window'
+    53: 'Master Center Right Window'
+    54: 'Master Right Window'
+    55: 'Master Bath Left Window'
+    56: 'Master Bath Right Window'
+    57: 'Master Bath Rear Window'
+    58: 'Library Windows South'
+    59: 'Library Window Center Right'
+    60: 'Library Window North Left'
+    61: 'Library Window North Right'
+    62: 'Fourth Floor Bathroom Window'
+    63: 'Roof Deck Door'
+  notify:
+    alarm:
+      phone:
+        - '14159991212'                        # Chris
+      sms:
+        - '14159991212'                        # Chris
+    info:
+      email:
+        - 'Chris Columbus <chris.columbus@gmail.com>'
+    all:
+      email:
+        - 'Alarm Log <alarm-testing@evillair.net>'

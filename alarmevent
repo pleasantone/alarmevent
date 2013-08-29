@@ -1,0 +1,1019 @@
+#!/usr/bin/php -q
+<?php
+/*
+
+Alarm Call Center notification system
+
+This program reads saved events from asterisk alarm receiver.  It parses
+the events, looks them up in a calling account database, and then notifies
+appropriate parties based upon the severity of the event.
+
+Originally Written by Uros Indihar <uros.indihar@alphito.si> Alphito d.o.o.
+
+Almost totally rewritten from scratch by Paul Traina http://pst.org starting
+in 2012.
+
+Changelog 
+    0.1 Initial release
+    0.2 2008-12-1 Added mail support
+    0.3 2012-11-4 Complete rewrite, support new drivers, code refactoring, alarm
+        event processing, account database, etc.
+    0.4 2013-06-3 YAML account database, document dependencies
+        
+License GNU GPL2.
+
+Warranty: None. Use at your own risk !
+
+TODO:
+    Add actual partition support for contact-ID format
+    Replace twidge with PHP library that does native twitter support
+    Check and report notification errors in all the handlers
+    Don't read the YAML database for each event received (performance lose)
+*/
+
+
+class contactidAccount {
+    private $report_actions = array();
+
+    public function __construct($acctnum,
+				$accountdb = '/etc/alarmevent/accounts.yaml') {
+
+	require_once 'SymfonyComponents/YAML/sfYaml.php';
+
+        $this->report_actions = sfYaml::load($accountdb);
+
+// debugging to check that our yaml parser works
+//	file_put_contents('/tmp/dump.yaml',
+//			  sfYaml::dump($this->report_actions, 100));
+//	file_put_contents('/tmp/dump.pd', print_r($this->report_actions, 1));
+
+        if (!is_array($this->report_actions[$acctnum]))
+            throw new Exception("Invalid account number ${acctnum}");           
+    
+        $this->account = $this->report_actions[$acctnum];
+    }
+
+    public function name() {
+        return isset($this->account["account_name"]) ?
+                     $this->account["account_name"] : "[UNKNOWN ACCOUNT]";
+    }
+
+    public function location() {
+        return isset($this->account["service_location"]) ?
+                     $this->account["service_location"] : "[UNKNOWN LOCATION]";
+    }
+   
+    public function notifies($class) {
+        return isset($this->account["notify"][$class]) ?
+                     $this->account["notify"][$class] : array();
+    }
+
+    public function user($user) {
+        return isset($this->account["users"][$user]) ?
+                     $this->account["users"][$user] : "[User ${user}]";
+    }
+
+    public function zone($zone) {
+        return isset($this->account["zones"][$zone]) ?
+                     $this->account["zones"][$zone] : "[Zone ${zone}]";
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+
+class contactidEvent {
+    // information about events
+    private $eventMap = array(
+        100 => array(
+           "label" => "Medical Alert",
+            "type"  => "zone",
+        ),
+        101 => array(
+            "label" => "Personal Emergency",
+            "type"  => "zone",
+        ),
+        102 => array(
+            "label" => "Failure to Report In",
+            "type"  => "zone",
+        ),
+        110 => array(
+            "label" => "Fire Alarm",
+            "type"  => "zone",
+        ),
+        111 => array(
+            "label" => "Smoke Alarm",
+            "type"  => "zone",
+        ),
+        112 => array(
+            "label" => "Combustion Detected Alarm",
+            "type"  => "zone",
+        ),
+        113 => array(
+            "label" => "Water Flood Alarm",
+            "type"  => "zone",
+        ),
+        114 => array(
+            "label" => "Excessive Heat Alarm",
+            "type"  => "zone",
+        ),
+        115 => array(
+            "label" => "Fire Alarm Pulled",
+            "type"  => "zone",
+        ),
+        116 => array(
+            "label" => "Duct Alarm",
+            "type"  => "zone",
+        ),
+        117 => array(
+            "label" => "Flame Detected",
+            "type"  => "zone",
+        ),
+        118 => array(
+            "label" => "Near Alarm",
+            "type"  => "zone",
+        ),
+        120 => array(
+            "label" => "Panic Alarm",
+            "type"  => "zone",
+        ),
+        121 => array(
+            "label" => "Duress Alarm",
+            "type"  => "user",
+        ),
+        122 => array(
+            "label" => "Alarm, 24-hour Silent",
+            "type"  => "zone",
+        ),
+        123 => array(
+            "label" => "Alarm, 24-hour Audible",
+            "type"  => "zone",
+        ),       
+        124 => array(
+            "label" => "Duress - Access granted",
+            "type"  => "zone",
+        ),
+        125 => array(
+            "label" => "Duress - Egress granted",
+            "type"  => "zone",
+        ),
+        130 => array(
+            "label" => "Burgalry in Progress",
+            "type"  => "zone",
+        ),
+        131 => array(
+            "label" => "Alarm, Perimeter",
+            "type"  => "zone",
+        ),
+        132 => array(
+            "label" => "Alarm, Interior",
+            "type"  => "zone",
+        ),
+        133 => array(
+            "label" => "24 Hour (Safe)",
+            "type"  => "zone",
+        ),
+        134 => array(
+            "label" => "Alarm, Entry/Exit",
+            "type"  => "zone",
+        ),
+        135 => array(
+            "label" => "Alarm, Day/Night",
+            "type"  => "zone",
+        ),
+        136 => array(
+            "label" => "Alarm, Outdoor",
+            "type"  => "zone",
+        ),
+        137 => array(
+            "label" => "Alarm, Tamper",
+            "type"  => "zone",
+        ),
+        138 => array(
+            "label" => "Near Alarm",
+            "type"  => "zone",
+        ),
+        139 => array(
+            "label" => "Intrusion Verifier",
+            "type"  => "zone",
+        ),
+        140 => array(
+            "label" => "Alarm, General Alarm",
+            "type"  => "zone",
+        ),
+        141 => array(
+            "label" => "Alarm, Polling Loop Open",
+            "type"  => "zone",
+        ),
+        142 => array(
+            "label" => "Alarm, Polling Loop Short",
+            "type"  => "zone",
+        ),
+        143 => array(
+            "label" => "Alarm, Expansion Module",
+            "type"  => "zone",
+        ),
+        144 => array(
+            "label" => "Alarm, Sensor Tamper",
+            "type"  => "zone",
+        ),
+        145 => array(
+            "label" => "Alarm, Expansion Module Tamper",
+            "type"  => "zone",
+        ),
+        146 => array(
+            "label" => "Silent Burglary",
+            "type"  => "zone",
+        ),
+        147 => array(
+            "label" => "Sensor Supervision failure",
+            "type"  => "zone",
+        ),
+        150 => array(
+            "label" => "Alarm, 24-Hour Auxiliary",
+            "type"  => "zone",
+        ),
+        151 => array(
+            "label" => "Alarm, Gas detected",
+            "type"  => "zone",
+        ),
+        152 => array(
+            "label" => "Alarm, Refrigeration",
+            "type"  => "zone",
+        ),
+        153 => array(
+            "label" => "Alarm, Loss of heat",
+            "type"  => "zone",
+        ),
+        154 => array(
+            "label" => "Alarm, Water leakage",
+            "type"  => "zone",
+        ),
+        155 => array(
+            "label" => "Alarm, foil break",
+            "type"  => "zone",
+        ),
+        156 => array(
+            "label" => "Day trouble",
+            "type"  => "zone",
+        ),
+        157 => array(
+            "label" => "Low bottled gas level",
+            "type"  => "zone",
+        ),
+        158 => array(
+            "label" => "Alarm, High temperature",
+            "type"  => "zone",
+        ),
+        159 => array(
+            "label" => "Alarm, Low temperature",
+            "type"  => "zone",
+        ),
+        161 => array(
+            "label" => "Alarm, Loss of air flow",
+            "type"  => "zone",
+        ),
+        162 => array(
+            "label" => "Alarm, Carbon Monoxide Detected",
+            "type"  => "zone",
+        ),
+        163 => array(
+            "label" => "Alarm, Tank Level",
+            "type"  => "zone",
+        ),
+    
+        300 => array(
+            "label" => "System Trouble",
+            "type"  => "zone",
+        ),
+        301 => array(
+            "label" => "AC Power",
+            "type"  => "zone",
+        ),
+        302 => array(
+            "label" => "Low System Battery/Battery Test Fail",
+            "type"  => "zone",
+        ),
+        303 => array(
+            "label" => "RAM Checksum Bad",
+            "type"  => "zone",
+        ),
+        304 => array(
+            "label" => "ROM Checksum Bad",
+            "type"  => "zone",
+        ),
+        305 => array(
+            "label" => "System Reset",
+            "type"  => "zone",
+        ),
+        306 => array(
+            "label" => "Panel programming changed",
+            "type"  => "zone",
+        ),
+        307 => array(
+            "label" => "Self-test failure",
+            "type"  => "zone",
+        ),
+        308 => array(
+            "label" => "System shutdown",
+            "type"  => "zone",
+        ),
+        309 => array(
+            "label" => "Battery test failure",
+            "type"  => "zone",
+        ),
+        310 => array(
+            "label" => "Ground fault",
+            "type"  => "zone",
+        ),
+        311 => array(
+            "label" => "Battery Missing/Dead",
+            "type"  => "zone",
+        ),
+        312 => array(
+            "label" => "Power Supply Overcurrent",
+            "type"  => "zone",
+        ),
+        313 => array(
+            "label" => "Engineer Reset",
+            "type"  => "user",
+        ),
+        321 => array(
+            "label" => "Bell/Siren Trouble",
+            "type"  => "zone",
+        ),
+        333 => array(
+            "label" => "Trouble or Tamper Expansion Module",
+            "type"  => "zone",
+        ),
+        341 => array(
+            "label" => "Trouble, ECP Cover Tamper",
+            "type"  => "zone",
+        ),
+        344 => array(
+            "label" => "RF Receiver Jam",
+            "type"  => "zone",
+        ),
+        351 => array(
+            "label" => "Telco Line Fault",
+            "type"  => "zone",
+        ),
+        353 => array(
+            "label" => "Long Range Radio Trouble",
+            "type"  => "zone",
+        ),
+        373 => array(
+            "label" => "Fire Loop Trouble",
+            "type"  => "zone",
+        ),
+        374 => array(
+            "label" => "Exit Error Alarm",
+            "type"  => "zone",
+        ),
+        380 => array(
+            "label" => "Global Trouble, Trouble Day/Night",
+	    "type"  => "zone",
+        ),
+        381 => array(
+            "label" => "RF Supervision Trouble",
+            "type"  => "zone",
+        ),
+        382 => array(
+            "label" => "Supervision Auxillary Wire Zone",
+            "type"  => "zone",
+        ),
+        383 => array(
+            "label" => "RF Sensor Tamper",
+            "type"  => "zone",
+        ),
+        384 => array(
+            "label" => "RF Sensor Low Battery",
+            "type"  => "zone",
+        ),
+        393 => array(
+            "label" => "Clean Me",
+            "type"  => "zone",
+        ),
+    
+        401 => array(
+            "label" => "AWAY/MAX",
+            "type"  => "user",
+        ),
+        403 => array(
+            "label" => "Scheduled Arming",
+            "type"  => "user",
+        ),
+        406 => array(
+            "label" => "Cancel by User",
+            "type"  => "user",
+        ),
+        407 => array(
+            "label" => "Remote Arm/Disarm (Downloading)",
+            "type"  => "user",
+        ),
+        408 => array(
+            "label" => "Quick AWAY/MAX",
+            "type"  => "user",
+        ),
+        409 => array(
+            "label" => "AWAY/MAX Keyswitch",
+            "type"  => "user",
+        ),
+	411 => array(
+	    "label" => "Callback Requested",
+	    "type"  => "user",
+	),
+	412 => array(
+	    "label" => "Success-Download/Access",
+	    "type"  => "user",
+	),
+	413 => array(
+	    "label" => "Unsuccessful Access",
+	    "type"  => "user",
+	),
+	414 => array(
+	    "label" => "System Shutdown",
+	    "type"  => "user",
+	),
+	415 => array(
+	    "label" => "Dialer Shutdown",
+	    "type"  => "user",
+	),
+	416 => array(
+	    "label" => "Successful Upload",
+	    "type"  => "user",
+	),
+	421 => array(
+	    "label" => "Access Denied",
+	    "type"  => "user",
+	),
+	422 => array(
+	    "label" => "Access Granted",
+	    "type"  => "user",
+	),
+	423 => array(
+	    "label" => "PANIC Forced Access",
+	    "type"  => "zone",
+	),
+	424 => array(
+	    "label" => "Egress Denied",
+	    "type"  => "user",
+	),
+	425 => array(
+	    "label" => "Egress Granted",
+	    "type"  => "user",
+	),
+	426 => array(
+	    "label" => "Access Door Propped Open",
+	    "type"  => "zone",
+	),
+	427 => array(
+	    "label" => "Access Point DSM Trouble",
+	    "type"  => "zone",
+	),
+	428 => array(
+	    "label" => "Access Point RTE Trouble",
+	    "type"  => "zone",
+	),
+	429 => array(
+	    "label" => "Access Program Mode Entry",
+	    "type"  => "user",
+	),
+	430 => array(
+	    "label" => "Access Program Mode Exit",
+	    "type"  => "user",
+	),
+	431 => array(
+	    "label" => "Access Threat Level Change",
+	    "type"  => "user",
+	),
+	432 => array(
+	    "label" => "Access Relay/Triger Failure",
+	    "type"  => "zone",
+	),
+	433 => array(
+	    "label" => "Access RTE Shunt",
+	    "type"  => "zone",
+	),
+	434 => array(
+	    "label" => "Access DSM Shunt",
+	    "type"  => "zone",
+	),
+        441 => array(
+            "label" => "STAY/INSTANT",
+            "type"  => "user",
+        ),
+        442 => array(
+            "label" => "STAY/INSTANT Keyswitch",
+            "type"  => "user",
+        ),
+    
+        570 => array(
+            "label" => "Zone Bypass",
+            "type"  => "zone",
+        ),
+
+	574 => array(
+	    "label" => "Group Bypass",
+	    "type"  => "user"
+	),
+    
+        601 => array(
+            "label" => "Operator Initiated Dialer Test",
+            "type"  => "user",
+        ),
+        602 => array(
+            "label" => "Periodic Test",
+            "type"  => "zone",
+        ),
+        606 => array(
+            "label" => "AAV to follow",
+            "type"  => "zone",
+        ),
+        607 => array(
+            "label" => "Walk Test",
+            "type"  => "user",
+        ),
+        623 => array(
+            "label" => "Event Log 80% Full",
+            "type"  => "zone",
+        ),
+        625 => array(
+            "label" => "Real-Time Clock Changed",
+            "type"  => "user",
+        ),
+        627 => array(
+            "label" => "Program Mode Entry",
+            "type"  => "zone",
+        ),
+        628 => array(
+            "label" => "Program Mode Exit",
+            "type"  => "zone",
+        ),
+        629 => array(
+            "label" => "1-1/3 Day No Event",
+            "type"  => "zone",
+        ),
+        642 => array(
+            "label" => "Latch Key",
+            "type"  => "user",
+        ),
+        // XXX unknown exceptions -- 652, 653 -- all user events
+        // XXX			     461, 465 -- all zone
+    );
+
+    public function __construct($event, $metadata) {
+        $this->acctnum = intval(substr($event, 0, 4));  // account
+        $this->mt      = intval(substr($event, 4, 2));  // message type (18, 98)
+        $this->q       = intval(substr($event, 6, 1));  // 1 = new open
+                                                        // 3 = new close
+                                                        // 6 = status report
+        $this->event   = intval(substr($event, 7, 3));  // event code
+        $this->part    = intval(substr($event,10, 2));  // partion
+        $this->zonenum = intval(substr($event,12, 3));  // zone
+        $this->cksum   = intval(substr($event,15, 1));  // checksum
+    
+        $this->metadata = $metadata;
+    }
+    
+    public function shortdump() {
+        return sprintf("%04d-%02d-%d-%03d-%02d-%03d-%d@%s",
+                       $this->acctnum, $this->mt, $this->q, $this->event,
+                       $this->part, $this->zonenum, $this->cksum,
+                       $this->time());
+    }
+    
+    public function metadump() {
+        return print_r($this->metadata, true) . "\n";
+    }
+    
+    public function account() {
+        return $this->acctnum;
+    }
+
+    public function isAlarm() {
+        return $this->event >= 100 && $this->event < 200;
+    }
+
+    public function notifies() {
+        if ($this->event < 200 && $this->q == 1)
+           $classes[] = "alarm";
+    
+        if ($this->event != 602)
+           $classes[] = "info";
+    
+        $classes[] = "all";
+
+        return $classes;
+    }
+
+    public function time() {
+        if (! ($ptime = strptime($this->metadata['TIMESTAMP'],
+                 '%a %b %d, %Y @ %H:%M:%S %Z')))
+            return "[UNKNOWN TIME]";
+    
+        return strftime("%x %R",
+             mktime($ptime["tm_hour"], $ptime["tm_min"],
+                $ptime["tm_sec"], $ptime["tm_mon"]+1,
+                $ptime["tm_mday"], $ptime["tm_year"]+1900));
+    }
+
+    public function name($acct) {
+	$str = $this->text();
+        if ($this->zonenum)
+            $str .= ", " . ($this->isUser() ? $acct->user($this->zonenum)
+                                            : $acct->zone($this->zonenum));
+        return $str;
+    }
+    
+    private function text() {
+        if (isset($this->eventMap[$this->event]) &&
+            isset($this->eventMap[$this->event]["label"]))
+            $str = $this->eventMap[$this->event]["label"];
+        else
+            $str = "[Event " . $this->event . "]";
+    
+        switch($this->q) {
+        case 1:
+            $str .= $this->isArming() ? " Disarmed" : " Started";
+            break;
+        case 3:
+            $str .= $this->isArming() ? " Armed" : " Stopped";
+            break;
+        case 6:
+            $str .= " Status Update";
+            break;
+        default:
+            $str .= " [Qualifier=" . $this->q . "]";
+            break;
+        }
+
+        return $str;
+    }
+    
+    private function isUser() {
+        if (!isset($this->eventMap[$this->event]) ||
+            !isset($this->eventMap[$this->event]["type"]))
+            return false;
+    
+        return "user" == $this->eventMap[$this->event]["type"];
+    }
+
+    private function isArming() {
+        return $this->event >= 400 && $this->event < 500;
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+
+interface Notifies {
+    public function send($event, $account, $cinfo);
+}
+
+
+//
+// Twitter DMs
+//
+class notify_twitter implements Notifies {
+    // twitter/twidge command & configuration data (override $HOME)
+    private $twidge = "/usr/bin/twidge -c /var/lib/asterisk/.twidgerc";
+    
+    public function __construct($config) {
+        foreach ($config as $param => $value)
+            $this->$param = $value;
+    }
+
+    public function send($event, $account, $cinfo) {
+        $msg = "Alarm at " . $account->name() . " on " .
+               $event->time() . ": " . $event->name($account);
+    
+        foreach ($cinfo as $dest) {
+            $lastline = system($this->twidge . " dmsend $dest \"$msg\" 2>&1",
+                               $retval);
+            
+            // XXX bug in this logic, if twidge fails, it will break the loop
+            // before all twitter recipients for this level are notified                                                  
+            if ($retval)
+                throw new Exception($lastline . " [dest=${dest}]");
+        }
+    }
+}
+
+//
+// Google Voice SMS
+//
+class notify_sms implements Notifies {
+    public function __construct($config) {
+        require_once 'class.googlevoice.php';
+    
+        foreach ($config as $param => $value)
+            $this->$param = $value;
+    }
+
+    public function send($event, $account, $cinfo) {
+        if (!isset($this->username) || !isset($this->password))
+            throw new Exception('SMS notifications not configured');
+
+        $msg = "Alarm at " . $account->name() . " on " .
+               $event->time() . ": " . $event->name($account);
+    
+        $gv = new GoogleVoice($this->username, $this->password);
+        if (!$gv)
+            throw new Exception('SMS notification unavailable');
+        
+        foreach ($cinfo as $dest) {
+            $result = $gv->sms($dest, $msg);
+            
+            // XXX need to parse the result to see if SMS succeeded
+            // if it fails, figure out if try again or not
+        }
+    }
+}
+
+//
+// Boxcar
+//
+class notify_boxcar implements Notifies {
+    public function __construct($config) {
+        require_once 'Boxcar-PHP-Provider/boxcar_api.php';
+
+        foreach ($config as $param => $value)
+            $this->$param = $value;
+    }
+
+    public function send($event, $account, $cinfo) {    
+        if (!isset($this->api_key) || !isset($this->api_icon))
+            throw new Exception("Boxcar not configured");
+
+        $msg = $event->name($account) . "\n at " .   $event->time();
+    
+        foreach ($cinfo as $dest) {
+            boxcar_api::factory($this->api_key, $this->api_sec, $this->api_icon)->
+                notify($dest, $account->name(), $msg);
+            // XXX check notification failures and do something about them
+        }
+    }
+}
+
+//
+// Asterisk Voice call notificiations
+//
+class notify_phone implements Notifies {
+    private $call_dir    = "/var/spool/asterisk/outgoing/";
+    
+    public function __construct($config) {
+        foreach ($config as $param => $value)
+            $this->$param = $value;
+    }
+
+    public function send($event, $account, $cinfo) {
+        if (!isset($this->from) || !isset($this->chan_prefix))
+            throw new Exception("Phone notifications not configured"); 
+    
+        foreach($cinfo as $dest) {
+    
+            $msg = "Channel: " . $this->chan_prefix . $dest . "\n" .
+               "CallerID: " .  $this->from . "\n" .
+               "MaxRetries: 10\n" .
+               "RetryTime: 60\n" .
+               "WaitTime: 30\n" .
+               "Context: alarmreport\n" .
+               "Extension: s\n" .
+               "Priority: 1\n";
+    
+            $msg .='Set: OutMessage="Warning! Alarm at ' .
+               $account->name() . ': ' .  $event->name($account) . "\"\n";
+    
+            $retval = file_put_contents($this->call_dir . uniqid("alarm") .
+                                        ".call", $msg);
+
+            // XXX check notification failures and do something about them
+	    // there's really no way to do that because we use such a
+	    // primitive interface back to Asterisk.  Could use the MGR
+	    // interface instead.
+        }
+    }
+}
+
+class notify_email implements Notifies {
+    private $from_name = 'Alarm Report';
+
+    public function __construct($config) {
+        foreach ($config as $param => $value)
+            $this->$param = $value;
+    }
+
+    public function send($event, $account, $cinfo) {
+        if (!isset($this->from) || !isset($this->from_name))
+            throw new Exception("Mail notifications not configured");
+    
+        $msg = "Alarm at " . $account->name() . " at " .
+               $account->location() . ": " . $event->name($account) . "\n\n" .
+               "Logged event at " . $event->time() . "\n";
+               
+        $msg .= "\n\nEvent data:\n" . 
+                $event->shortdump() . "\n" .
+                $event->metadump();       
+    
+        $subject =
+            ($event->isAlarm() ? "[ALARM] " : "[ALARMSTATUS] ") .
+            $account->name() . ": " . $event->name($account);
+    
+        $headers  = "MIME-Version: 1.0\n";
+        $headers .= "Content-type: text/plain; charset=utf-8\n";
+        $headers .= "From: " . $this->from . "\n";
+            
+        foreach($cinfo as $dest) {
+            $retval = mail($dest, $subject, $msg, $headers);
+            // XXX check notification failures and do something about them
+        }
+     }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+
+class contactidParser {
+    private $debug = false;
+
+    // input file parsing
+    private $events_dir    = "/var/spool/asterisk/alarm/";
+    private $eventPrefix   = "event-";
+    private $lastEventSave = "last_received_event";
+    
+    public function __construct($configFile) {
+        $this->config = parse_ini_file($configFile, TRUE);
+
+        if (isset($this->config["general"]["debug"]))
+            $this->debug = $this->config["general"]["debug"];
+        
+        if (isset($this->config["general"]["events_dir"]))
+            $this->events_dir = $this->config["general"]["events_dir"];
+    }
+
+    public function setDebug($debug) {
+        $this->debug = $debug;
+    }
+
+    public function setDir($dir) {
+        $this->events_dir = $dir;
+    }
+
+    public function getEventFiles() {
+        $eventFiles = array();
+        $eventPrefixLen = strlen($this->eventPrefix);
+    
+        if ($dh = opendir($this->events_dir)) {
+            while (($file = readdir($dh)) !== false) {
+                if (substr($file, 0, $eventPrefixLen) == $this->eventPrefix) {
+                    $eventFiles[$file] = filemtime($this->events_dir.$file);
+                }
+            }
+            asort($eventFiles);
+            closedir($dh);
+        }
+        $this->eventFiles = $eventFiles;
+    }
+
+    public function processEventFiles() {
+        foreach ($this->eventFiles as $file => $mtime) {
+            $data = $this->parseFile($file);
+    
+            foreach ($data["events"] as $eventstr) {    
+                $ev = new contactidEvent($eventstr, $data["metadata"]);
+                        
+                if ($this->isDuplicate($eventstr)) {
+                    $this->log($ev, LOG_NOTICE, "duplicate event");
+                } else {
+                    $this->log($ev, LOG_INFO, "new event");
+
+                    try {
+                        $acct = new contactidAccount($ev->account());
+
+                    } catch (Exception $ex) {
+                        $this->log($ev, LOG_CRIT, $ex->getMessage());
+                        continue;
+                    }
+
+                    foreach ($ev->notifies() as $severity)
+                        $this->notify($ev, $acct, $severity);
+
+                    $this->saveLastEvent($eventstr);
+                }
+            }
+    
+            if (! $this->debug)
+                unlink($this->events_dir.$file);
+        }
+    }
+
+    private function notify($ev, $acct, $severity) {
+    
+        foreach ($acct->notifies($severity) as $channel => $cinfo) {
+            $notclass = "notify_" . $channel;
+            if (class_exists($notclass)) {
+                try {
+		    $cfg = isset($this->config[$channel]) ?
+				 $this->config[$channel] : array();
+                    $notify = new $notclass($cfg);
+                    $notify->send($ev, $acct, $cinfo);
+                } catch (Exception $ex) {
+                    $this->log($ev, LOG_ERR, $ex->getMessage());
+                }
+            } else
+                $this->log($ev, LOG_ERR, "Unsupported notification channel ${channel}");
+        }
+    }
+
+    // If this event is the same as the last event, and it occured less than
+    // an hour ago, then we'll treat it as if it's a duplicate.
+    private function isDuplicate($eventstr) {
+        if ($this->debug)
+            return false;
+        
+        $str = @file_get_contents($this->events_dir.$this->lastEventSave);
+        if (! $str)
+            return false;
+        
+        list($lastEvent, $lastTime) = explode(", ", trim($str));
+        
+        if ($lastEvent != $eventstr)
+            return false;
+        
+        if (time() - $lastTime > 3600)
+            return false;
+        
+        return true;
+    }
+        
+    private function saveLastEvent($event) {
+        // XXX should we use the event file mtime here instead?
+        file_put_contents($this->events_dir.$this->lastEventSave,
+                  $event . ", " . time() . "\n");
+    }
+
+    private function log($ev, $severity, $string) {
+        static $opened = false;
+    
+        if (! $opened) {
+            openlog("afteralarmevent", 0, LOG_USER);
+            $opened = true;
+        }
+        syslog($severity, $ev->shortdump() . ": " . $string);
+    }
+
+    private function parseFile($file) {
+        if (($fp = fopen($this->events_dir.$file,"r")) == FALSE)
+            throw new Exception("Unable to open " . $this->events_dir.$file .
+				": " . $php_errormsg);
+        $section = "";  
+        $data = array();
+        
+        while (!feof($fp)) {
+            $line = trim(fgets($fp,4096));
+        
+            if (substr($line,0,1) == "[") {
+                //new section started
+                $section = substr($line,1,-1);
+                $data[$section] = array();
+            
+            } elseif (strlen($section) > 0) {
+
+                //we are in section
+                switch ($section) {
+                case "metadata":
+                    if (strlen($line) > 0) { //dont include empty lines
+                        list($key, $val) = explode("=", $line);
+                        $data[$section][trim($key)] = trim($val);
+                    }
+                    break;
+                case "events":
+                    if (strlen($line) > 0)
+                        $data[$section][] = trim($line);
+                    break;
+                }
+            }
+        }
+        fclose($fp);
+        return $data;
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+$options = getopt('', array(
+    	'config:',		// override configuration file location
+));
+
+if (!isset($options['config']))
+    $options['config'] = '/etc/alarmevent/config.ini';
+
+$cip = new contactidParser($options['config']);
+$cip->getEventFiles();
+$cip->processEventFiles();
+?>

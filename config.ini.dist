@@ -1,0 +1,23 @@
+[general]
+# debug		= true
+# events_dir	= /var/spool/asterisk/alarm
+
+[twitter]
+# twidge	= '/usr/bin/twidge -c /var/lib/asterisk/.twidgerc'
+
+[sms]
+# google voice account
+username	= 'user@gmail.com'
+password	= 'XXXXXXXXXXXXXX'
+
+[boxcar]
+api_key		= 'hl2XmnfTVDPKR3fzXVaO'
+api_icon	= 'http://shockwave.org/security57.png'
+
+[phone]
+from		= 'Alarm Company <14155559999>'
+call_dir	= '/var/spool/asterisk/outgoing/'
+chan_prefix	= 'SIP/myvoipprovider/'
+
+[email]
+from		= 'Alarm Report <alarm@alarmcompany.org>'
