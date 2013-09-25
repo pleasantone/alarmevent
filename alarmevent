@@ -596,8 +596,12 @@ class contactidEvent {
         return $this->event >= 100 && $this->event < 200;
     }
 
-    public function notifies() {
-        if ($this->event < 200 && $this->q == 1)
+    public function isStart() {
+	return $this->q == 1;
+    }
+
+    public function alarmclasses() {
+        if ($this->event < 200)
            $classes[] = "alarm";
     
         if ($this->event != 602)
@@ -783,9 +787,11 @@ class notify_phone implements Notifies {
                "Context: alarmreport\n" .
                "Extension: s\n" .
                "Priority: 1\n";
-    
-            $msg .='Set: OutMessage="Warning! Alarm at ' .
-               $account->name() . ': ' .  $event->name($account) . "\"\n";
+ 
+            $msg .= 'Set: OutMessage="';
+	    $msg .= $event->isStart() ? 'Alarm canceled at '
+				      : 'Warning! Alarm at ';
+	    $msg .= $account->name() . ': ' . $event->name($account) . "\"\n";
     
             $retval = file_put_contents($this->call_dir . uniqid("alarm") .
                                         ".call", $msg);
@@ -899,7 +905,7 @@ class contactidParser {
                         continue;
                     }
 
-                    foreach ($ev->notifies() as $severity)
+                    foreach ($ev->alarmclasses() as $severity)
                         $this->notify($ev, $acct, $severity);
 
                     $this->saveLastEvent($eventstr);
