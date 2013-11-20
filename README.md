@@ -38,18 +38,14 @@ Notifications include:
 	email	- send an e-mail message describing the event
 	sms	- use Google Voice to send a SMS message
 	twitter	- twitter direct message
-	boxcar	- boxcar push API for iOS devices
+	twidge	- old way to do twitter DMs
 
 Auxillary programs:
 
-If you wish to use Twitter DMs, you'll need to install twidge and install
-a twitter account.
+If you wish to use Twitter DMs, you'll need to create a twitter account and
+create API keys for this application, or install twidge and set it up.
 
 If you wish to use SMS, you'll need to set up a google voice account.
-
-If you wish to use Boxcar, you can use the APIs already configured in
-config.ini or create your own.
-
 
 ======= Configuration:
 
@@ -99,13 +95,16 @@ asterisk		- of course
 php5			- of course
 flite			- used for text->speech processing for outbound reports
 mail-transport-agent	- some way of sending out e-mail
-twidge			- used for twitter reports
 php-symfony-yaml	- YAML parser/dumper for account database
-git			- only to pull down Boxcar's API if you use it
+git			- only to pull down Boxcar & Twitter APIs
+twidge			- formerly used for twitter reports
 
 GoogleVoice support is used to send SMS alerts, since most VOIP
 providers don't have a SMS interface.  Get class.googlevoice.php from
 http://code.google.com/p/phpgooglevoice/ and copy it to /usr/share/php/
+
+twitter-api-php is used to send Twitter DMs as alerts.  Get it from
+https://github.com/J7mbo/twitter-api-php.git and copy it to /usr/share/php/
 
 BoxCar support is used to send Boxcar push alerts for iOS devices: get
 via git https://github.com/boxcar/Boxcar-PHP-Provider.git and copy it
@@ -206,12 +205,12 @@ SMS:
     use two-step authentication, make sure you create an application
     specific password for this program.
 
-Boxcar:
-    You will use the generic Boxcar API keys, no need for anything special here
-    since we don't do broadcasts.  If you want to use a private API, you
-    may specify it in config.ini.
+Twitter (native):
+    You will need to create API keys for your instance of this application.
+    I suggest creating a twitter account just for it (joesalarm), then
+    got to dev.twitter.com and create an application for Joe's Alarm Collective.
 
-Twitter:
+Twitter (via twidge):
     Configure twidge to be able to send out twitter DMs.
 
     sudo su -s /bin/bash asterisk
@@ -219,7 +218,6 @@ Twitter:
     twidge setup
 
     This should write a file out in ~asterisk (/var/lib/asterisk/.twidgerc).
-    I
 
 Voice Phone calls:
 

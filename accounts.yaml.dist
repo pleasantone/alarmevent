@@ -91,8 +91,6 @@ default_vista_zones: &default_vista_zones
     info:	# additionally, these get informational level status updates
       email:
         - 'John Doe <john@doefamily.com>'
-      boxcar:
-        - john@doefamily.com
     all:	# additionally, these get -everything- including periodic tests
       email:
         - 'Alarm Log <alarm-testing@evillair.net>'

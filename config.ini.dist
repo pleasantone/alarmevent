@@ -3,16 +3,21 @@
 # events_dir	= /var/spool/asterisk/alarm
 
 [twitter]
+# these need to be created using at the dev.twitter.com site
+# since you will be creating your own "application" (or use twidge below)
+oauth_access_token = ''
+oauth_access_token_secret = ''
+consumer_key	= ''
+consumer_secret	= ''
+
+# depricated, but you can still use twidge rather than set up twitter APIs
+# [twidge]
 # twidge	= '/usr/bin/twidge -c /var/lib/asterisk/.twidgerc'
 
 [sms]
 # google voice account
 username	= 'user@gmail.com'
 password	= 'XXXXXXXXXXXXXX'
-
-[boxcar]
-api_key		= 'hl2XmnfTVDPKR3fzXVaO'
-api_icon	= 'http://shockwave.org/security57.png'
 
 [phone]
 from		= 'Alarm Company <14155559999>'
@@ -21,3 +26,8 @@ chan_prefix	= 'SIP/myvoipprovider/'
 
 [email]
 from		= 'Alarm Report <alarm@alarmcompany.org>'
+
+# boxcar servers appear to be no longer responding
+# [boxcar]
+# api_key        = 'hl2XmnfTVDPKR3fzXVaO'
+# api_icon       = 'http://shockwave.org/security57.png'

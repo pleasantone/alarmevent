@@ -26,7 +26,6 @@ Warranty: None. Use at your own risk !
 
 TODO:
     Add actual partition support for contact-ID format
-    Replace twidge with PHP library that does native twitter support
     Check and report notification errors in all the handlers
     Don't read the YAML database for each event received (performance lose)
 */
@@ -682,6 +681,40 @@ interface Notifies {
 // Twitter DMs
 //
 class notify_twitter implements Notifies {
+    public function __construct($config) {
+        require_once 'twitter-api-php/TwitterAPIExchange.php';
+
+	try {
+	    $this->twitter = new TwitterAPIExchange($config);
+        } catch (Exception $ex) {
+	    throw new Exception("twitter: new " . $ex->getMessage());
+        }
+    }
+
+    public function send($event, $account, $cinfo) {
+        $msg = "Alarm at " . $account->name() . " on " .
+               $event->time() . ": " . $event->name($account);
+
+        foreach ($cinfo as $dest) {
+	    $postfields = array('screen_name' => $dest,
+				'text' => $msg);
+	   try {
+	    $this->twitter->buildOauth(
+			'https://api.twitter.com/1.1/direct_messages/new.json',
+			'POST')
+		         ->setPostfields($postfields)
+			 ->performRequest();
+	    } catch (Exception $ex) {
+	        throw new Exception("twitter: DM @$dest " . $ex->getMessage());
+	    }
+        }
+    }
+}
+
+//
+// Twitter DMs via twidge
+//
+class notify_twidge implements Notifies {
     // twitter/twidge command & configuration data (override $HOME)
     private $twidge = "/usr/bin/twidge -c /var/lib/asterisk/.twidgerc";
     
@@ -844,8 +877,6 @@ class notify_email implements Notifies {
 
 
 class contactidParser {
-    private $debug = false;
-
     // input file parsing
     private $events_dir    = "/var/spool/asterisk/alarm/";
     private $eventPrefix   = "event-";
@@ -854,8 +885,10 @@ class contactidParser {
     public function __construct($configFile) {
         $this->config = parse_ini_file($configFile, TRUE);
 
-        if (isset($this->config["general"]["debug"]))
+        if (isset($this->config["general"]["debug"])) {
             $this->debug = $this->config["general"]["debug"];
+	    error_reporting(E_ALL);
+	}
         
         if (isset($this->config["general"]["events_dir"]))
             $this->events_dir = $this->config["general"]["events_dir"];
