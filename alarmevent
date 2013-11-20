@@ -814,7 +814,7 @@ class notify_phone implements Notifies {
     
             $msg = "Channel: " . $this->chan_prefix . $dest . "\n" .
                "CallerID: " .  $this->from . "\n" .
-               "MaxRetries: 10\n" .
+               "MaxRetries: 2\n" .
                "RetryTime: 60\n" .
                "WaitTime: 30\n" .
                "Context: alarmreport\n" .
@@ -822,8 +822,8 @@ class notify_phone implements Notifies {
                "Priority: 1\n";
  
             $msg .= 'Set: OutMessage="';
-	    $msg .= $event->isStart() ? 'Alarm canceled at '
-				      : 'Warning! Alarm at ';
+	    $msg .= $event->isStart() ? 'Warning! Alarm at '
+				      : 'Alarm canceled at ';
 	    $msg .= $account->name() . ': ' . $event->name($account) . "\"\n";
     
             $retval = file_put_contents($this->call_dir . uniqid("alarm") .
