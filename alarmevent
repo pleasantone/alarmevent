@@ -843,7 +843,7 @@ class notify_phone implements Notifies {
             $msg .= 'Set: OutMessage="' .
              	    $event->name($account) . " at " . $account->name() . "\"\n";
     
-            if (file_put_contents($filename, $msg))
+            if (FALSE == file_put_contents($filename, $msg))
 		$event->log(LOG_ERR, "voice: unable to write $filename");
         }
     }
@@ -863,10 +863,10 @@ class notify_email implements Notifies {
     
         $msg = $event->name($account) . " at " . 
 	       $account->name() . " / " . $account->location() . " on " .
-               $event->time() . "\n\n";
+               $event->time() . "\n";
     
-        $msg .= "\n\nRaw Event data:\n" . 
-                $event->shortdump() . "\n" .
+        $msg .= "\nRaw Event data:\n\n" . 
+                $event->shortdump() . "\n\n" .
                 $event->metadump();       
     
         $subject =
