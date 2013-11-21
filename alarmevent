@@ -15,10 +15,11 @@ in 2012.
 
 Changelog 
     0.1 Initial release
-    0.2 2008-12-1 Added mail support
-    0.3 2012-11-4 Complete rewrite, support new drivers, code refactoring, alarm
+    0.2 2008-12-01 Added mail support
+    0.3 2012-11-04 Rewrite, support new drivers, code refactoring, alarm
         event processing, account database, etc.
-    0.4 2013-06-3 YAML account database, document dependencies
+    0.4 2013-06-03 YAML account database, document dependencies
+    0.5 2013-11-20 Native twitter API, cleanup.
         
 License GNU GPL2.
 
@@ -577,7 +578,7 @@ class contactidEvent {
     }
     
     public function shortdump() {
-        return sprintf("%04d-%02d-%d-%03d-%02d-%03d-%d@%s",
+        return sprintf("%04d-%02d-%d-%03d-%02d-%03d-%d @ %s",
                        $this->acctnum, $this->mt, $this->q, $this->event,
                        $this->part, $this->zonenum, $this->cksum,
                        $this->time());
@@ -623,35 +624,50 @@ class contactidEvent {
     }
 
     public function name($acct) {
-	$str = $this->text();
+	$str = $this->qtext() . " " . $this->evtext();
         if ($this->zonenum)
             $str .= ", " . ($this->isUser() ? $acct->user($this->zonenum)
                                             : $acct->zone($this->zonenum));
         return $str;
     }
+
+    public function log($severity, $string) {
+        static $opened = false;
     
-    private function text() {
+        if (! $opened) {
+            openlog("alarmevent", 0, LOG_USER);
+            $opened = true;
+        }
+        syslog($severity, $this->shortdump() . ": " . $string);
+    }
+
+    private function qtext() {
+        switch($this->q) {
+        case 1:
+            $str = $this->isArming() ? "Disarmed" : "Started";
+            break;
+        case 3:
+            $str = $this->isArming() ? "Armed" : "Stopped";
+            break;
+        case 6:
+            $str = "Status Update";
+            break;
+        default:
+            $str = "[Qualifier=" . $this->q . "]";
+            break;
+        }
+	return $str;
+    }
+    
+    private function evtext() {
+	$str = $this->qtext();
+
         if (isset($this->eventMap[$this->event]) &&
             isset($this->eventMap[$this->event]["label"]))
             $str = $this->eventMap[$this->event]["label"];
         else
             $str = "[Event " . $this->event . "]";
     
-        switch($this->q) {
-        case 1:
-            $str .= $this->isArming() ? " Disarmed" : " Started";
-            break;
-        case 3:
-            $str .= $this->isArming() ? " Armed" : " Stopped";
-            break;
-        case 6:
-            $str .= " Status Update";
-            break;
-        default:
-            $str .= " [Qualifier=" . $this->q . "]";
-            break;
-        }
-
         return $str;
     }
     
@@ -692,20 +708,21 @@ class notify_twitter implements Notifies {
     }
 
     public function send($event, $account, $cinfo) {
-        $msg = "Alarm at " . $account->name() . " on " .
-               $event->time() . ": " . $event->name($account);
+        $msg = $event->name($account) . " at " . 
+	       $account->name() . " on " .
+               $event->time();
 
         foreach ($cinfo as $dest) {
 	    $postfields = array('screen_name' => $dest,
 				'text' => $msg);
 	   try {
-	    $this->twitter->buildOauth(
+	       $this->twitter->buildOauth(
 			'https://api.twitter.com/1.1/direct_messages/new.json',
 			'POST')
 		         ->setPostfields($postfields)
 			 ->performRequest();
 	    } catch (Exception $ex) {
-	        throw new Exception("twitter: DM @$dest " . $ex->getMessage());
+		$event->log(LOG_ERR, "twitter: DM @$dest " . $ex->getMessage());
 	    }
         }
     }
@@ -724,17 +741,15 @@ class notify_twidge implements Notifies {
     }
 
     public function send($event, $account, $cinfo) {
-        $msg = "Alarm at " . $account->name() . " on " .
-               $event->time() . ": " . $event->name($account);
+        $msg = $event->name($account) . " at " . 
+	       $account->name() . " on " .
+               $event->time();
     
         foreach ($cinfo as $dest) {
             $lastline = system($this->twidge . " dmsend $dest \"$msg\" 2>&1",
                                $retval);
-            
-            // XXX bug in this logic, if twidge fails, it will break the loop
-            // before all twitter recipients for this level are notified                                                  
             if ($retval)
-                throw new Exception($lastline . " [dest=${dest}]");
+		$event->log(LOG_ERR, "twidge: DM @$dest " . $lastline);
         }
     }
 }
@@ -748,14 +763,16 @@ class notify_sms implements Notifies {
     
         foreach ($config as $param => $value)
             $this->$param = $value;
+
     }
 
     public function send($event, $account, $cinfo) {
         if (!isset($this->username) || !isset($this->password))
             throw new Exception('SMS notifications not configured');
 
-        $msg = "Alarm at " . $account->name() . " on " .
-               $event->time() . ": " . $event->name($account);
+        $msg = $event->name($account) . " at " . 
+	       $account->name() . " on " .
+               $event->time();
     
         $gv = new GoogleVoice($this->username, $this->password);
         if (!$gv)
@@ -812,6 +829,8 @@ class notify_phone implements Notifies {
     
         foreach($cinfo as $dest) {
     
+            $filename = $this->call_dir . uniqid("alarm") . ".call";
+
             $msg = "Channel: " . $this->chan_prefix . $dest . "\n" .
                "CallerID: " .  $this->from . "\n" .
                "MaxRetries: 2\n" .
@@ -821,18 +840,11 @@ class notify_phone implements Notifies {
                "Extension: s\n" .
                "Priority: 1\n";
  
-            $msg .= 'Set: OutMessage="';
-	    $msg .= $event->isStart() ? 'Warning! Alarm at '
-				      : 'Alarm canceled at ';
-	    $msg .= $account->name() . ': ' . $event->name($account) . "\"\n";
+            $msg .= 'Set: OutMessage="' .
+             	    $event->name($account) . " at " . $account->name() . "\"\n";
     
-            $retval = file_put_contents($this->call_dir . uniqid("alarm") .
-                                        ".call", $msg);
-
-            // XXX check notification failures and do something about them
-	    // there's really no way to do that because we use such a
-	    // primitive interface back to Asterisk.  Could use the MGR
-	    // interface instead.
+            if (file_put_contents($filename, $msg))
+		$event->log(LOG_ERR, "voice: unable to write $filename");
         }
     }
 }
@@ -849,11 +861,11 @@ class notify_email implements Notifies {
         if (!isset($this->from) || !isset($this->from_name))
             throw new Exception("Mail notifications not configured");
     
-        $msg = "Alarm at " . $account->name() . " at " .
-               $account->location() . ": " . $event->name($account) . "\n\n" .
-               "Logged event at " . $event->time() . "\n";
-               
-        $msg .= "\n\nEvent data:\n" . 
+        $msg = $event->name($account) . " at " . 
+	       $account->name() . " / " . $account->location() . " on " .
+               $event->time() . "\n\n";
+    
+        $msg .= "\n\nRaw Event data:\n" . 
                 $event->shortdump() . "\n" .
                 $event->metadump();       
     
@@ -866,8 +878,8 @@ class notify_email implements Notifies {
         $headers .= "From: " . $this->from . "\n";
             
         foreach($cinfo as $dest) {
-            $retval = mail($dest, $subject, $msg, $headers);
-            // XXX check notification failures and do something about them
+	    if (!mail($dest, $subject, $msg, $headers))
+		$event->log(LOG_ERR, "mail: unable to send to $dest");
         }
      }
 }
@@ -881,6 +893,7 @@ class contactidParser {
     private $events_dir    = "/var/spool/asterisk/alarm/";
     private $eventPrefix   = "event-";
     private $lastEventSave = "last_received_event";
+    private $debug	   = false;
     
     public function __construct($configFile) {
         $this->config = parse_ini_file($configFile, TRUE);
@@ -926,15 +939,15 @@ class contactidParser {
                 $ev = new contactidEvent($eventstr, $data["metadata"]);
                         
                 if ($this->isDuplicate($eventstr)) {
-                    $this->log($ev, LOG_NOTICE, "duplicate event");
+                    $ev->log(LOG_NOTICE, "duplicate event");
                 } else {
-                    $this->log($ev, LOG_INFO, "new event");
+                    $ev->log(LOG_INFO, "new event");
 
                     try {
                         $acct = new contactidAccount($ev->account());
 
                     } catch (Exception $ex) {
-                        $this->log($ev, LOG_CRIT, $ex->getMessage());
+                        $ev->log(LOG_CRIT, $ex->getMessage());
                         continue;
                     }
 
@@ -961,10 +974,10 @@ class contactidParser {
                     $notify = new $notclass($cfg);
                     $notify->send($ev, $acct, $cinfo);
                 } catch (Exception $ex) {
-                    $this->log($ev, LOG_ERR, $ex->getMessage());
+                    $ev->log(LOG_ERR, $ex->getMessage());
                 }
             } else
-                $this->log($ev, LOG_ERR, "Unsupported notification channel ${channel}");
+                $ev->log(LOG_ERR, "Unsupported notification channel ${channel}");
         }
     }
 
@@ -993,16 +1006,6 @@ class contactidParser {
         // XXX should we use the event file mtime here instead?
         file_put_contents($this->events_dir.$this->lastEventSave,
                   $event . ", " . time() . "\n");
-    }
-
-    private function log($ev, $severity, $string) {
-        static $opened = false;
-    
-        if (! $opened) {
-            openlog("afteralarmevent", 0, LOG_USER);
-            $opened = true;
-        }
-        syslog($severity, $ev->shortdump() . ": " . $string);
     }
 
     private function parseFile($file) {
