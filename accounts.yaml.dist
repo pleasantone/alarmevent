@@ -41,20 +41,20 @@ default_vista_zones: &default_vista_zones
     10: 'Garage Overhead Door'
     11: 'Garage Side Door (Trash)'
     12: 'Garage Rear Door (Garden)'
-    13: 'Downstairs BR Door'
-    14: 'Downstairs BR Side Window'
-    15: 'Downstairs BR Rear Window'
-    16: 'LR Left Window'
-    17: 'LR Right Window'
-    18: 'FR Front Window'
-    19: 'FR Rear Window'
+    13: 'Downstairs Bedroom Door'
+    14: 'Downstairs Bedroom Side Window'
+    15: 'Downstairs Bedroom Rear Window'
+    16: 'Living Room Left Window'
+    17: 'Living Room Right Window'
+    18: 'Family Room Front Window'
+    19: 'Family Room Rear Window'
     20: 'Kitchen Door'
     21: 'Kitchen Window'
-    22: 'MBR Left Window'
-    23: 'MBR Right Window'
-    24: 'Front BR Left Window'
-    25: 'Front BR Middle Window'
-    26: 'Front BR Right Window'
+    22: 'Master Bedroom Left Window'
+    23: 'Master Bedroom Right Window'
+    24: 'Front Bedroom Left Window'
+    25: 'Front Bedroom Middle Window'
+    26: 'Front Bedroom Right Window'
     27: 'Foyer Motion'
     28: 'Foyer Smoke'
     29: 'Bedroom Hall Smoke'
@@ -63,14 +63,14 @@ default_vista_zones: &default_vista_zones
     32: 'Shark Pool'
     33: 'Frickin Lazer Beams'
     34: 'Mutated Sea Bass Room'
-    49: 'John Keyfob Arm Away'
-    50: 'John Keyfob Arm Stay'
-    51: 'John Keyfob Disarm'
-    52: 'John Keyfob Panic (unused)'
-    53: 'Jim Keyfob Arm Away'
-    54: 'Jim Keyfob Arm Stay'
-    55: 'Jim Keyfob Disarm'
-    56: 'Jim Keyfob Panic (unused)'
+    49: 'John Remote Arm Away'
+    50: 'John Remote Arm Stay'
+    51: 'John Remote Disarm'
+    52: 'John Remote Panic (unused)'
+    53: 'Jim Remote Arm Away'
+    54: 'Jim Remote Arm Stay'
+    55: 'Jim Remote Disarm'
+    56: 'Jim Remote Panic (unused)'
   notify:
     alarm:	# the following addresses receive message in case of an alarm
       phone:
@@ -86,14 +86,14 @@ default_vista_zones: &default_vista_zones
         - savage
         - doctorevil
       email:
-        - 'Jim Doe <jim@doefamily.com>'
-        - 'Doctor Evil <nicedoc@evillair.net>'
+        - 'Jim Doe <jim@doe.example.com>'
+        - 'Doctor Evil <nicedoc@evil-lair.example.com>'
     info:	# additionally, these get informational level status updates
       email:
-        - 'John Doe <john@doefamily.com>'
+        - 'John Doe <john@doe.example.com>'
     all:	# additionally, these get -everything- including periodic tests
       email:
-        - 'Alarm Log <alarm-testing@evillair.net>'
+        - 'Alarm Log <alarm-testing@evil-lair.example.com>'
 
 #
 # Another house we monitor, but this one uses a DSC alarm with SIA event tones,
@@ -156,7 +156,7 @@ default_vista_zones: &default_vista_zones
         - '14159991212'                        # Chris
     info:
       email:
-        - 'Chris Columbus <chris.columbus@gmail.com>'
+        - 'Chris Columbus <chris.columbus@gmail.example.com>'
     all:
       email:
-        - 'Alarm Log <alarm-testing@evillair.net>'
+        - 'Alarm Log <alarm-testing@evil-lair.example.com>'
