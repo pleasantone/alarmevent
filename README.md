@@ -91,13 +91,13 @@ messages), we need to notify a whole bunch of people multiple ways.
 
 The following Debian dependencies are needed (and anything they include)
 
-asterisk		- of course
-php5			- of course
-flite			- used for text->speech processing for outbound reports
-mail-transport-agent	- some way of sending out e-mail
-php-symfony-yaml	- YAML parser/dumper for account database
-git			- only to pull down Boxcar & Twitter APIs
-twidge			- formerly used for twitter reports
+	asterisk		- of course
+	php5-cli		- it's written in PHP
+	flite			- used for text->speech processing for outbound reports
+	mail-transport-agent	- some way of sending out e-mail
+	php-symfony-yaml	- YAML parser/dumper for account database
+	git			- only to pull down Boxcar & Twitter APIs
+	twidge			- formerly used for twitter reports
 
 GoogleVoice support is used to send SMS alerts, since most VOIP
 providers don't have a SMS interface.  Get class.googlevoice.php from
