@@ -32,19 +32,21 @@ TODO:
 */
 
 
+
+require_once "Symfony/Component/Yaml/autoloader.php";
+use Symfony\Component\Yaml\Yaml;
+
 class contactidAccount {
     private $report_actions = array();
 
     public function __construct($acctnum,
 				$accountdb = '/etc/alarmevent/accounts.yaml') {
 
-	require_once 'SymfonyComponents/YAML/sfYaml.php';
-
-        $this->report_actions = sfYaml::load($accountdb);
+        $this->report_actions = Yaml::parse(file_get_contents($accountdb));
 
 // debugging to check that our yaml parser works
 //	file_put_contents('/tmp/dump.yaml',
-//			  sfYaml::dump($this->report_actions, 100));
+//			  Yaml::dump($this->report_actions, 100));
 //	file_put_contents('/tmp/dump.pd', print_r($this->report_actions, 1));
 
         if (!is_array($this->report_actions[$acctnum]))
@@ -827,7 +829,7 @@ class notify_phone implements Notifies {
         if (!isset($this->from) || !isset($this->chan_prefix))
             throw new Exception("Phone notifications not configured"); 
     
-        foreach($cinfo as $dest) {
+        foreach ($cinfo as $dest) {
     
             $filename = $this->call_dir . uniqid("alarm") . ".call";
 
@@ -877,7 +879,7 @@ class notify_email implements Notifies {
         $headers .= "Content-type: text/plain; charset=utf-8\n";
         $headers .= "From: " . $this->from . "\n";
             
-        foreach($cinfo as $dest) {
+        foreach ($cinfo as $dest) {
 	    if (!mail($dest, $subject, $msg, $headers))
 		$event->log(LOG_ERR, "mail: unable to send to $dest");
         }
@@ -967,7 +969,7 @@ class contactidParser {
     
         foreach ($acct->notifies($severity) as $channel => $cinfo) {
             $notclass = "notify_" . $channel;
-            if (class_exists($notclass)) {
+            if (class_exists($notclass) && !empty($cinfo)) {
                 try {
 		    $cfg = isset($this->config[$channel]) ?
 				 $this->config[$channel] : array();
